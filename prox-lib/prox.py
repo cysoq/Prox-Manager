@@ -10,6 +10,23 @@ def print_sorted_dict(d):
         print(f"\t{key}: {d[key]}")
     print("}")
 
+def dict_diff(dict1, dict2):
+    diff = {}
+
+    # Keys only in dict1
+    for key in dict1:
+        if key not in dict2:
+            diff[key] = (dict1[key], None)
+        elif dict1[key] != dict2[key]:
+            diff[key] = (dict1[key], dict2[key])
+
+    # Keys only in dict2
+    for key in dict2:
+        if key not in dict1:
+            diff[key] = (None, dict2[key])
+
+    return diff
+
 logging.basicConfig(
     level=logging.CRITICAL,  # This captures all levels of logs
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -113,29 +130,26 @@ class prox_manager():
         return r.json()["data"]
 
     def check_rig_config_type(self, vm_config):
-        vm_config_str = json.dumps(vm_config, indent=4)
-
         vms = self.config_dict["vms"]
-        vm_type_str = "hybrid"
-        for vm_type in vms:
-            vm_type_str = vm_type
-            for hardware in vms[vm_type]:
-                if vms[vm_type][hardware] == "Nullable":
-                    #Does not matter if exists or not
-                    continue
-                elif hardware in vm_config:
-                    if vms[vm_type][hardware] != "*" and vms[vm_type][hardware] != vm_config[hardware]:
-                        # the hardware value is not a token, and does not match
-                        vm_type_str = "hybrid"
-                        break
-                else:
-                    vm_type_str = "hybrid"
-                    break
 
-            if vm_type_str != "hybrid":
-                return vm_type_str
+        for vm_type in vms:
+            compare_vm_config = {}
+            vm_type_config = vms[vm_type]
+            for hardware in vm_type_config:
+                # If nullable, do not need it in either the compare or vm_config
+                if vm_type_config[hardware] == "Nullable":
+                    if hardware in vm_config:
+                        vm_config.pop(hardware)
+                # If *, will add it to the compare
+                elif vm_type_config[hardware] == "*":
+                    compare_vm_config[hardware] = vm_config[hardware]
+                # If it is a specific value, will set that in the compare
+                elif vm_type_config[hardware] != "*":
+                    compare_vm_config[hardware] = vm_type_config[hardware]
+            if compare_vm_config == vm_config:
+                return vm_type
             
-        return vm_type_str
+        return "hybrid"
     
     def update_rig_config_type(self, node, vmid, new_type):
         cur_vm_config = self.get_vm_config(node, vmid)
@@ -162,7 +176,20 @@ class prox_manager():
             else:
                 continue
 
-        if self.check_rig_config_type(new_vm_config) == new_type:
+        # Delete hardware in previous config that is not in new config
+        hardware_to_delete = []
+        for hardware in cur_vm_config:
+            if hardware not in new_vm_config:
+                hardware_to_delete.append(hardware)
+        if len(hardware_to_delete) != 0:
+            hardware_to_delete_str = ",".join(hardware_to_delete)
+            new_vm_config["delete"] = hardware_to_delete_str
+
+        check_new_vm_config = new_vm_config.copy()
+        if "delete" in check_new_vm_config:
+            del check_new_vm_config["delete"]
+
+        if self.check_rig_config_type(check_new_vm_config) == new_type:
             return new_vm_config
         
         self.logger.error("update_rig_config_type failed")
@@ -184,8 +211,9 @@ class prox_manager():
         config_url = self.base_adr + f"nodes/{node}/qemu/{vmid}/status/{status}"
         r = self.post_req(config_url, data={})
 
+        print(r.content)
         if r.status_code > 199 and r.status_code < 300:
-            print(r.content)
+            
             return True
 
         return False
@@ -245,6 +273,8 @@ def main():
                         print("Changing Status") 
                     else: 
                         print("Status Change failed") 
+                else: 
+                    print("stat Paramater Not Recognized")
 
             # Change the config (option 2)
             elif command_list[0].strip() == "conf":
@@ -257,11 +287,15 @@ def main():
                     new_config_type = command_list[3].strip()
 
                     new_config = prox_client.update_rig_config_type(node, vmid, new_config_type)
+                    if new_config == False or new_config == {}:
+                        print("Config Change failed")
                 
-                    if prox_client.update_vm_config(node, vmid, new_config) is True:
+                    elif prox_client.update_vm_config(node, vmid, new_config) is True:
                         print("Changing Config")
                     else:
                         print("Config Change failed") 
+                else:
+                    print("conf Paramater Not Recognized")
             else:
                 print("Command Not Recognized")
         else:
