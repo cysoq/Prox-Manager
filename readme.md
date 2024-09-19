@@ -69,15 +69,15 @@ Currently, by running the library file lib/prox.py, you can access a command-lin
 
 Example output from running python3 prox.py (in the `lib` directory):
 ```
---------------------------------------------------------------------------------------
-Configs: ['passthrough-100', 'passthrough-75', 'passthrough-50', 'headlless-50','headlless-25']
+-------------------------------------------------------------------------------------
+Configs: ['passthrough-100', 'passthrough-75', 'passthrough-50', 'headless-50', 'headless-25']
 Status: ['reboot', 'reset', 'resume', 'shutdown', 'start', 'stop', 'suspend']
 
 Nodes:
 * MainframeIX(1)
         - RigIX(101): running, passthrough-50
-        - CyberRigIX(103): running, headlless-25
-        - WinRigIX(102): stopped, headlless-25
+        - WinRigIX(102): stopped, headless-25
+        - CyberRigIX(103): stopped, passthrough-50
 
 Change VM Status: stat, {nodeid}, {vmid}, {status}
 Change VM Config: conf, {nodeid}, {vmid}, {configs}
